@@ -35,7 +35,7 @@ async function run() {
         app.post('/register', async (req, res) => {
             const UserData = req.body;
             try {
-                const { email } = UserData; 
+                const { email } = UserData;
                 const existingUser = await userCollection.findOne({ email });
                 if (existingUser) {
                     return res.status(409).json({ message: 'Email Already in use ' });
@@ -66,13 +66,27 @@ async function run() {
 
                 const matchPass = await bcrypt.compare(password, user.password);
                 if (matchPass) {
-                    const token = jwt.sign({ email: user.email },"this-is-jwt-token", { expiresIn: '100' });
+                    const token = jwt.sign({ email: user.email }, "this-is-jwt-token", { expiresIn: '100' });
                     res.status(200).json({ message: 'Login successful', token });
                 } else {
                     res.status(401).json({ message: 'Invalid user or password' });
                 }
             } catch (error) {
                 res.status(500).json({ message: 'Failed to login' });
+            }
+        });
+
+
+        app.get('/userinfo', async (req, res) => {
+            try {
+                const { user } = req;
+                const userInfo = await userCollection.findOne({ _id: user.id });
+                if (!userInfo) {
+                    return res.status(404).json({ message: 'User not found' })
+                }
+                res.json(userInfo)
+            } catch (error) {
+                res.status(500).json({ message: 'Internal Server Error' });
             }
         });
 
