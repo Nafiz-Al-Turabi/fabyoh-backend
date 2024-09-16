@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
 const app = express();
 const port = process.env.PORT || 5000;
@@ -11,6 +11,26 @@ const jwt = require('jsonwebtoken');
 // middleware
 app.use(cors());
 app.use(express.json());
+
+// Middleware to authenticate the token
+const jwtSecretKey = process.env.SECRET_KEY;
+function verifyToken(req, res, next) {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1]; // Extract the token part
+    if (!token) {
+        return res.status(401).json('Access denied');
+    }
+
+    try {
+        const decoded = jwt.verify(token, jwtSecretKey);
+        req.user = decoded; // Attach decoded user to request object
+        next();
+    } catch (error) {
+        console.error('Error verifying token:', error);
+        return res.status(403).json({ message: 'Invalid token' });
+    }
+}
+
 
 // Mongo DB default code..
 // const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.f75tpn0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -66,7 +86,7 @@ async function run() {
 
                 const matchPass = await bcrypt.compare(password, user.password);
                 if (matchPass) {
-                    const token = jwt.sign({ email: user.email }, "this-is-jwt-token", { expiresIn: '100' });
+                    const token = jwt.sign({ email: user.email, id: user._id }, jwtSecretKey, { expiresIn: '1h' });
                     res.status(200).json({ message: 'Login successful', token });
                 } else {
                     res.status(401).json({ message: 'Invalid user or password' });
@@ -77,18 +97,21 @@ async function run() {
         });
 
 
-        app.get('/userinfo', async (req, res) => {
+
+        app.get('/userinfo', verifyToken, async (req, res) => {
             try {
                 const { user } = req;
-                const userInfo = await userCollection.findOne({ _id: user.id });
+                const userInfo = await userCollection.findOne({ _id: new ObjectId(user.id) });
                 if (!userInfo) {
-                    return res.status(404).json({ message: 'User not found' })
+                    return res.status(404).json({ message: 'User not found' });
                 }
-                res.json(userInfo)
+                res.json(userInfo);
             } catch (error) {
+                console.error('Error in /userinfo:', error);
                 res.status(500).json({ message: 'Internal Server Error' });
             }
         });
+
 
 
         await client.db("admin").command({ ping: 1 });
