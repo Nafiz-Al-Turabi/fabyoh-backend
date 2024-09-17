@@ -50,8 +50,9 @@ async function run() {
     try {
         await client.connect();
 
-        const userCollection = client.db('Fabyoh').collection('users')
-
+        const userCollection = client.db('Fabyoh').collection('users');
+        const cartCollection = client.db('Fabyoh').collection('carts');
+        // ************************************ User Authentication***************************************
         app.post('/register', async (req, res) => {
             const UserData = req.body;
             try {
@@ -96,8 +97,6 @@ async function run() {
             }
         });
 
-
-
         app.get('/userinfo', verifyToken, async (req, res) => {
             try {
                 const { user } = req;
@@ -111,6 +110,96 @@ async function run() {
                 res.status(500).json({ message: 'Internal Server Error' });
             }
         });
+        // ************************************ User Authentication End***************************************
+
+        // ************************************ User Cart ***************************************
+
+
+        app.post('/cart', verifyToken, async (req, res) => {
+            try {
+                const { user } = req;
+                const item = { ...req.body, email: user.email };
+                const cart = await cartCollection.insertOne(item);
+                res.status(200).json({ message: 'Cart added successfully.' });
+            } catch (error) {
+                res.status(404).json({ message: 'Failed to add cart.', error });
+            }
+        });
+
+
+
+        app.get('/carts', verifyToken, async (req, res) => {
+            const { user } = req;
+            try {
+                const userCart = await cartCollection.find({ email: user.email }).toArray();
+                if (userCart.length > 0) {
+                    res.status(200).json(userCart);
+                } else {
+                    res.status(404).json({ message: 'Cart not found' });
+                }
+            } catch (error) {
+                console.error('Error fetching cart:', error);
+                res.status(500).json({ message: 'Failed to fetch cart', error });
+            }
+        });
+
+        app.delete('/carts/:id', verifyToken, async (req, res) => {
+            const id = req.params.id; // Get the ID from route parameters
+        
+            try {
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).json({ message: 'Invalid ID format' });
+                }
+        
+                const deleteResult = await cartCollection.deleteOne({ _id: new ObjectId(id) });
+        
+                if (deleteResult.deletedCount === 0) {
+                    return res.status(404).json({ message: 'Cart item not found' });
+                }
+        
+                res.status(200).json({ message: 'Cart item deleted successfully' });
+            } catch (error) {
+                res.status(500).json({ message: 'Error deleting cart item', error: error.message });
+            }
+        });
+
+        app.patch('/cart/:id', verifyToken, async (req, res) => {
+            const id = req.params.id; // Get the ID from route parameters
+            const { user } = req;
+            const updateData = req.body;
+        
+            try {
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).json({ message: 'Invalid ID format' });
+                }
+        
+                // Validate update data if necessary
+                if (updateData.quantity && updateData.quantity <= 0) {
+                    return res.status(400).json({ message: 'Quantity must be greater than 0' });
+                }
+        
+                const result = await cartCollection.updateOne(
+                    { _id: new ObjectId(id), email: user.email },
+                    { $set: updateData }
+                );
+        
+                if (result.matchedCount === 0) {
+                    return res.status(404).json({ message: 'Cart item not found or not owned by the user' });
+                }
+        
+                res.status(200).json({ message: 'Cart item updated successfully' });
+            } catch (error) {
+                console.error('Error updating cart item:', error);
+                res.status(500).json({ message: 'Failed to update cart item', error: error.message });
+            }
+        });
+        
+        
+        
+
+        // ************************************ User Cart end ***************************************
+
+
 
 
 
