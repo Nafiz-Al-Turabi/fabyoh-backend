@@ -53,6 +53,32 @@ async function run() {
         const userCollection = client.db('Fabyoh').collection('users');
         const cartCollection = client.db('Fabyoh').collection('carts');
         // ************************************ User Authentication***************************************
+        // Middleware to check for admin or super admin
+        function requireAdmin(req, res, next) {
+            if (req.user.role !== 'admin' && req.user.role !== 'super admin') {
+                return res.status(403).json({ message: 'Access denied. Admins only.' });
+            }
+            next();
+        }
+
+        // Middleware to check for super admin
+        function requireSuperAdmin(req, res, next) {
+            if (req.user.role !== 'super admin') {
+                return res.status(403).json({ message: 'Access denied. Super admin only.' });
+            }
+            next();
+        }
+
+        // Example: Only admins can access this route
+        app.get('/admin-dashboard', verifyToken, requireAdmin, (req, res) => {
+            res.send('Welcome to the admin dashboard');
+        });
+
+        // Example: Only super admins can access this route
+        app.get('/super-admin-dashboard', verifyToken, requireSuperAdmin, (req, res) => {
+            res.send('Welcome to the super admin dashboard');
+        });
+
         app.post('/register', async (req, res) => {
             const UserData = req.body;
             try {
@@ -64,7 +90,7 @@ async function run() {
 
                 const hashedPassword = await bcrypt.hash(UserData.password, 10);
                 UserData.password = hashedPassword;
-
+                UserData.role = 'user';
                 //  hashed password
                 const result = await userCollection.insertOne(UserData);
                 res.status(201).json({ message: "User created successfully." });
@@ -87,7 +113,8 @@ async function run() {
 
                 const matchPass = await bcrypt.compare(password, user.password);
                 if (matchPass) {
-                    const token = jwt.sign({ email: user.email, id: user._id }, jwtSecretKey, { expiresIn: '1h' });
+                    // Include the user's role in the token
+                    const token = jwt.sign({ email: user.email, id: user._id, role: user.role }, jwtSecretKey, { expiresIn: '1h' });
                     res.status(200).json({ message: 'Login successful', token });
                 } else {
                     res.status(401).json({ message: 'Invalid user or password' });
@@ -110,6 +137,26 @@ async function run() {
                 res.status(500).json({ message: 'Internal Server Error' });
             }
         });
+
+        app.patch('/update-role/:id', verifyToken, requireSuperAdmin, async (req, res) => {
+            const { id } = req.params;
+            const { role } = req.body; 
+
+            if (!['user', 'admin', 'super admin'].includes(role)) {
+                return res.status(400).json({ message: 'Invalid role' });
+            }
+
+            try {
+                const result = await userCollection.updateOne({ _id: new ObjectId(id) }, { $set: { role } });
+                if (result.matchedCount === 0) {
+                    return res.status(404).json({ message: 'User not found' });
+                }
+                res.status(200).json({ message: 'User role updated successfully' });
+            } catch (error) {
+                res.status(500).json({ message: 'Failed to update user role' });
+            }
+        });
+
         // ************************************ User Authentication End***************************************
 
         // ************************************ User Cart ***************************************
@@ -145,18 +192,18 @@ async function run() {
 
         app.delete('/carts/:id', verifyToken, async (req, res) => {
             const id = req.params.id; // Get the ID from route parameters
-        
+
             try {
                 if (!ObjectId.isValid(id)) {
                     return res.status(400).json({ message: 'Invalid ID format' });
                 }
-        
+
                 const deleteResult = await cartCollection.deleteOne({ _id: new ObjectId(id) });
-        
+
                 if (deleteResult.deletedCount === 0) {
                     return res.status(404).json({ message: 'Cart item not found' });
                 }
-        
+
                 res.status(200).json({ message: 'Cart item deleted successfully' });
             } catch (error) {
                 res.status(500).json({ message: 'Error deleting cart item', error: error.message });
@@ -164,38 +211,38 @@ async function run() {
         });
 
         app.patch('/cart/:id', verifyToken, async (req, res) => {
-            const id = req.params.id; // Get the ID from route parameters
+            const id = req.params.id;
             const { user } = req;
             const updateData = req.body;
-        
+
             try {
                 if (!ObjectId.isValid(id)) {
                     return res.status(400).json({ message: 'Invalid ID format' });
                 }
-        
+
                 // Validate update data if necessary
                 if (updateData.quantity && updateData.quantity <= 0) {
                     return res.status(400).json({ message: 'Quantity must be greater than 0' });
                 }
-        
+
                 const result = await cartCollection.updateOne(
                     { _id: new ObjectId(id), email: user.email },
                     { $set: updateData }
                 );
-        
+
                 if (result.matchedCount === 0) {
                     return res.status(404).json({ message: 'Cart item not found or not owned by the user' });
                 }
-        
+
                 res.status(200).json({ message: 'Cart item updated successfully' });
             } catch (error) {
                 console.error('Error updating cart item:', error);
                 res.status(500).json({ message: 'Failed to update cart item', error: error.message });
             }
         });
-        
-        
-        
+
+
+
 
         // ************************************ User Cart end ***************************************
 
