@@ -33,8 +33,7 @@ function verifyToken(req, res, next) {
 
 
 // Mongo DB default code..
-// const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.f75tpn0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-const uri = "mongodb+srv://Fabyoh:PeklMnKnGvA8Pcam@cluster0.f75tpn0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.BD_PASS}@cluster0.f75tpn0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
     serverApi: {
@@ -63,7 +62,7 @@ async function run() {
 
         // Middleware to check for super admin
         function requireSuperAdmin(req, res, next) {
-            if (req.user.role !== 'super admin') {
+            if (req.user.role !== 'super-admin') {
                 return res.status(403).json({ message: 'Access denied. Super admin only.' });
             }
             next();
@@ -90,7 +89,7 @@ async function run() {
 
                 const hashedPassword = await bcrypt.hash(UserData.password, 10);
                 UserData.password = hashedPassword;
-                UserData.role = 'user';
+                UserData.role = 'admin';
                 //  hashed password
                 const result = await userCollection.insertOne(UserData);
                 res.status(201).json({ message: "User created successfully." });
@@ -124,6 +123,15 @@ async function run() {
             }
         });
 
+        app.get('/users', async (req, res) => {
+            try {
+                const userData = await userCollection.find().toArray();
+                res.json(userData)
+            } catch (error) {
+                res.status(404).json({ message: 'User data not found' })
+            }
+        })
+
         app.get('/userinfo', verifyToken, async (req, res) => {
             try {
                 const { user } = req;
@@ -140,7 +148,7 @@ async function run() {
 
         app.patch('/update-role/:id', verifyToken, requireSuperAdmin, async (req, res) => {
             const { id } = req.params;
-            const { role } = req.body; 
+            const { role } = req.body;
 
             if (!['user', 'admin', 'super admin'].includes(role)) {
                 return res.status(400).json({ message: 'Invalid role' });
@@ -156,6 +164,19 @@ async function run() {
                 res.status(500).json({ message: 'Failed to update user role' });
             }
         });
+
+        app.delete('/user/:id', verifyToken, async (req, res) => {
+            const id = req.params.id;
+            try {
+                const deleteUser = await userCollection.deleteOne({ _id: new ObjectId(id) })
+                if (deleteUser.deletedCount === 0) {
+                    return res.status(404).json({ message: 'User not found' })
+                }
+                res.status(200).json({ message: 'User deleted successfully' });
+            } catch (error) {
+                res.send(500).json({ message: 'Faild to delete user', error })
+            }
+        })
 
         // ************************************ User Authentication End***************************************
 
