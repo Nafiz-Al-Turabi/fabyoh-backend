@@ -7,6 +7,9 @@ const port = process.env.PORT || 5000;
 
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { default: Stripe } = require('stripe');
+
+const stripe = require("stripe")(process.env.STRIPE_KEY);
 
 // middleware
 app.use(cors());
@@ -130,7 +133,35 @@ async function run() {
             } catch (error) {
                 res.status(404).json({ message: 'User data not found' })
             }
-        })
+        });
+
+        app.put('/user/:email', verifyToken, async (req, res) => {
+            const email = req.params.email;
+            const updatedData = req.body;
+
+            try {
+                const user = await userCollection.findOne({ email: email });
+
+                if (!user) {
+                    return res.status(404).json({ message: 'User not found' });
+                }
+
+                const result = await userCollection.updateOne(
+                    { email: email },
+                    { $set: updatedData }
+                );
+
+                if (result.modifiedCount > 0) {
+                    return res.status(200).json({ message: 'User updated successfully' });
+                } else {
+                    return res.status(400).json({ message: 'No changes made' });
+                }
+            } catch (error) {
+                console.error('Error updating user:', error);
+                return res.status(500).json({ message: 'Internal server error' });
+            }
+        });
+
 
         app.get('/userinfo', verifyToken, async (req, res) => {
             try {
@@ -193,8 +224,6 @@ async function run() {
                 res.status(404).json({ message: 'Failed to add cart.', error });
             }
         });
-
-
 
         app.get('/carts', verifyToken, async (req, res) => {
             const { user } = req;
@@ -262,10 +291,29 @@ async function run() {
             }
         });
 
-
-
-
         // ************************************ User Cart end ***************************************
+        // ************************************ Payment Api ***************************************
+        app.post('/create-payment-intent',verifyToken, async (req, res) => {
+            try {
+                const { price } = req.body;
+                const amount = parseInt(price * 100);
+                console.log(amount);
+
+                const paymentIntent = await stripe.paymentIntents.create({
+                    amount: amount,
+                    currency: 'usd',
+                    payment_method_types: ['card']
+                });
+
+                res.send({
+                    clientSecret: paymentIntent.client_secret
+                });
+            } catch (error) {
+                res.status(500).send({ error: error.message });
+            }
+        });
+
+        // ************************************ Payment end ***************************************
 
 
 
