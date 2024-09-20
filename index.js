@@ -54,6 +54,7 @@ async function run() {
 
         const userCollection = client.db('Fabyoh').collection('users');
         const cartCollection = client.db('Fabyoh').collection('carts');
+        const paymentCollection = client.db('Fabyoh').collection('payments');
         // ************************************ User Authentication***************************************
         // Middleware to check for admin or super admin
         function requireAdmin(req, res, next) {
@@ -293,11 +294,11 @@ async function run() {
 
         // ************************************ User Cart end ***************************************
         // ************************************ Payment Api ***************************************
-        app.post('/create-payment-intent',verifyToken, async (req, res) => {
+        app.post('/create-payment-intent', verifyToken, async (req, res) => {
             try {
                 const { price } = req.body;
                 const amount = parseInt(price * 100);
-                console.log(amount);
+                // console.log(amount);
 
                 const paymentIntent = await stripe.paymentIntents.create({
                     amount: amount,
@@ -313,7 +314,78 @@ async function run() {
             }
         });
 
+        app.post('/payment', verifyToken, async (req, res) => {
+            const payment = req.body;
+            try {
+                const result = await paymentCollection.insertOne(payment);
+                const query = {
+                    email: payment.email,
+                    _id: {
+                        $in: payment.id.map(id => new ObjectId(id))
+                    }
+                };
+                const deleteResult = await cartCollection.deleteMany(query);
+                res.status(200).json({
+                    message: "Order Placed Successfully and Cart Items Deleted",
+                    paymentResult: result,
+                    cartDeleteResult: deleteResult
+                });
+            } catch (error) {
+                res.status(500).json({
+                    message: 'Something went wrong while placing the order',
+                    error
+                });
+            }
+        });
+
+        app.get('/orders', verifyToken, async (req, res) => {
+            const email = req.user.email;
+
+            try {
+                const result = await paymentCollection.find({ email: email }).toArray();
+                res.send(result);
+            } catch (error) {
+                console.error('Failed to get result', error);
+                res.status(500).send({ message: 'Internal Server Error' });
+            }
+        });
+
+        app.get('/adminOrders', verifyToken, async (req, res) => {
+            try {
+                const result = await paymentCollection.find().toArray();
+                res.status(200).json(result)
+            } catch (error) {
+                res.status(500).json({ message: 'Admin Orders not found', error });
+            }
+        });
+
+        app.patch('/adminOrders/:id', verifyToken, async (req, res) => {
+            const { id } = req.params;  
+            const { newStatus } = req.body;  
+
+            try {
+                const result = await paymentCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    { $set: { status: newStatus } }
+                );
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).json({ message: 'Order not found' });
+                } else if (result.modifiedCount === 0) {
+                    return res.status(400).json({ message: 'Status unchanged' });
+                }
+
+                res.status(200).json({ message: 'Order status updated successfully' });
+            } catch (error) {
+                res.status(500).json({ message: 'Failed to update order status', error });
+            }
+        });
+
+
+
+
         // ************************************ Payment end ***************************************
+
 
 
 
