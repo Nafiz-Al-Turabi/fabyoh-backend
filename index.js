@@ -36,7 +36,7 @@ function verifyToken(req, res, next) {
 
 
 // Mongo DB default code..
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.BD_PASS}@cluster0.f75tpn0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.f75tpn0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
     serverApi: {
@@ -55,6 +55,7 @@ async function run() {
         const userCollection = client.db('Fabyoh').collection('users');
         const cartCollection = client.db('Fabyoh').collection('carts');
         const paymentCollection = client.db('Fabyoh').collection('payments');
+        const productCollection = client.db('Fabyoh').collection('products');
         // ************************************ User Authentication***************************************
         // Middleware to check for admin or super admin
         function requireAdmin(req, res, next) {
@@ -93,7 +94,7 @@ async function run() {
 
                 const hashedPassword = await bcrypt.hash(UserData.password, 10);
                 UserData.password = hashedPassword;
-                UserData.role = 'admin';
+                UserData.role = 'user';
                 //  hashed password
                 const result = await userCollection.insertOne(UserData);
                 res.status(201).json({ message: "User created successfully." });
@@ -117,7 +118,7 @@ async function run() {
                 const matchPass = await bcrypt.compare(password, user.password);
                 if (matchPass) {
                     // Include the user's role in the token
-                    const token = jwt.sign({ email: user.email, id: user._id, role: user.role }, jwtSecretKey, { expiresIn: '1h' });
+                    const token = jwt.sign({ email: user.email, id: user._id, role: user.role }, jwtSecretKey, { expiresIn: '24h' });
                     res.status(200).json({ message: 'Login successful', token });
                 } else {
                     res.status(401).json({ message: 'Invalid user or password' });
@@ -339,16 +340,21 @@ async function run() {
         });
 
         app.get('/orders', verifyToken, async (req, res) => {
-            const email = req.user.email;
+            const email = req.user?.email;
+
+            if (!email) {
+                return res.status(400).send({ message: 'Invalid user email' });
+            }
 
             try {
-                const result = await paymentCollection.find({ email: email }).toArray();
+                const result = await paymentCollection.find({ email }).toArray();
                 res.send(result);
             } catch (error) {
                 console.error('Failed to get result', error);
                 res.status(500).send({ message: 'Internal Server Error' });
             }
         });
+
 
         app.get('/adminOrders', verifyToken, async (req, res) => {
             try {
@@ -360,8 +366,8 @@ async function run() {
         });
 
         app.patch('/adminOrders/:id', verifyToken, async (req, res) => {
-            const { id } = req.params;  
-            const { newStatus } = req.body;  
+            const { id } = req.params;
+            const { newStatus } = req.body;
 
             try {
                 const result = await paymentCollection.updateOne(
@@ -381,10 +387,40 @@ async function run() {
             }
         });
 
-
-
-
         // ************************************ Payment end ***************************************
+        // ************************************ Add Products ***************************************
+        app.post('/addproduct', verifyToken, async (req, res) => {
+            const formData = req.body;
+            try {
+                const addData = await productCollection.insertOne(formData);
+                res.status(200).json({ message: 'Product Added Successfully' })
+            } catch (error) {
+                res.status(500).json({ message: 'Faild to add products' })
+            }
+        });
+
+        app.get('/products',async (req, res) => {
+            try {
+                const productData = await productCollection.find().toArray();
+                res.status(200).json(productData);
+            } catch (error) {
+                res.status(500).json({ message: "Products not found" });
+            }
+        });
+        app.get('/products/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+                const query = {_id: new ObjectId(id)}
+                const details = await productCollection.findOne(query);
+                res.send(details)
+            } catch (error) {
+                res.json({message:'Failed to find product details'})
+            }
+        });
+
+        // ************************************ Add Products end ***************************************
+
+
 
 
 
