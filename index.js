@@ -399,7 +399,7 @@ async function run() {
             }
         });
 
-        app.get('/products',async (req, res) => {
+        app.get('/products', async (req, res) => {
             try {
                 const productData = await productCollection.find().toArray();
                 res.status(200).json(productData);
@@ -410,13 +410,56 @@ async function run() {
         app.get('/products/:id', async (req, res) => {
             try {
                 const id = req.params.id;
-                const query = {_id: new ObjectId(id)}
+                const query = { _id: new ObjectId(id) }
                 const details = await productCollection.findOne(query);
                 res.send(details)
             } catch (error) {
-                res.json({message:'Failed to find product details'})
+                res.json({ message: 'Failed to find product details' })
             }
         });
+
+        app.put('/products/:id', verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const updateProduct = req.body;
+
+            try {
+                const product = await productCollection.findOne({ _id: new ObjectId(id) });
+
+                if (!product) {
+                    return res.status(404).json({ message: 'Product not found' });
+                }
+
+                const result = await productCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    { $set: updateProduct }
+                );
+
+
+                res.status(200).json({
+                    message: 'Product updated successfully',
+                    result,
+                });
+            } catch (error) {
+                console.error(error);
+                res.status(500).json({ message: 'Error updating product', error });
+            }
+        });
+
+        app.delete('/products/:id', verifyToken, async (req, res) => {
+            const id = req.params.id
+            try {
+                const query = { _id: new ObjectId(id) };
+                const delleteProduct = await productCollection.deleteOne(query);
+
+                if (delleteProduct.deletedCount === 0) {
+                    return res.status(404).json({ message: 'Product not found' });
+                }
+                res.status(200).json({ message: 'Product Deleted Succesfully' })
+            } catch (error) {
+                res.status(200).json({ message: 'Failed to  Delete product' })
+            }
+        });
+
 
         // ************************************ Add Products end ***************************************
 
