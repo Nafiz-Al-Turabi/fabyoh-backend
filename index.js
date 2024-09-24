@@ -8,8 +8,15 @@ const port = process.env.PORT || 5000;
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { default: Stripe } = require('stripe');
+const paypal = require('paypal-rest-sdk');
 
 const stripe = require("stripe")(process.env.STRIPE_KEY);
+// paypal configuration
+paypal.configure({
+    'mode': 'sandbox',
+    'client_id': process.env.PAYPAL_CLIENT_ID,
+    'client_secret': process.env.PAYPAL_CLIENT_SECRET
+});
 
 // middleware
 app.use(cors());
@@ -386,6 +393,60 @@ async function run() {
                 res.status(500).json({ message: 'Failed to update order status', error });
             }
         });
+
+        // ################################# paypal ##########################################
+
+        app.post('/paypal/create-payment', verifyToken, (req, res) => {
+            const create_payment_json = {
+                "intent": "sale",
+                "payer": {
+                    "payment_method": "paypal"
+                },
+                "redirect_urls": {
+                    "return_url": "http://localhost:5000/success", // front-end success URL
+                    "cancel_url": "http://localhost:5000/cancel"   // front-end cancel URL
+                },
+                "transactions": [{
+                    "item_list": {
+                        "items": [{
+                            "name": "Item Name",
+                            "sku": "item",
+                            "price": req.body.amount,
+                            "currency": "USD",
+                            "quantity": 1
+                        }]
+                    },
+                    "amount": {
+                        "currency": "USD",
+                        "total": req.body.amount
+                    },
+                    "description": "This is the payment description."
+                }]
+            };
+            paypal.payment.create(create_payment_json, function (error, payment) {
+                if (error) {
+                    res.status(500).json({ error: error.message })
+                } else {
+                    const redirectUrl = payment.links.find(link => link.rel === 'approval_url').href;
+                    res.json({ forwardLink: redirectUrl });
+                }
+            })
+        });
+
+        // Route to execute payment after approval
+        app.post('/paypal/execute-payment', (req, res) => {
+            const paymentId = req.body.paymentId;
+            const payerId = { payer_id: req.body.payerId };
+
+            paypal.payment.execute(paymentId, payerId, function (error, payment) {
+                if (error) {
+                    res.status(500).json({ error: error.message });
+                } else {
+                    res.json({ success: true, payment });
+                }
+            });
+        });
+        // ################################# paypal End ##########################################
 
         // ************************************ Payment end ***************************************
         // ************************************ Add Products ***************************************
