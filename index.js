@@ -7,7 +7,6 @@ const port = process.env.PORT || 5000;
 
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { default: Stripe } = require('stripe');
 const paypal = require('paypal-rest-sdk');
 
 const stripe = require("stripe")(process.env.STRIPE_KEY);
@@ -21,6 +20,8 @@ paypal.configure({
 // middleware
 app.use(cors());
 app.use(express.json());
+const { default: Stripe } = require('stripe');
+
 
 // Middleware to authenticate the token
 const jwtSecretKey = process.env.SECRET_KEY;
@@ -324,18 +325,25 @@ async function run() {
 
         app.post('/payment', verifyToken, async (req, res) => {
             const payment = req.body;
+        
             try {
-                const result = await paymentCollection.insertOne(payment);
+                // Insert payment data into the payment collection
+                const paymentResult = await paymentCollection.insertOne(payment);
+        
+                // Build query for deleting cart items by email and _id
                 const query = {
-                    email: payment.email,
+                    email: payment.email,  // Delete all items associated with this email
                     _id: {
-                        $in: payment.id.map(id => new ObjectId(id))
+                        $in: payment.id.map(id => new ObjectId(id))  // Based on cart item ids provided in payment data
                     }
                 };
+        
+                // Perform deletion of cart items matching the query
                 const deleteResult = await cartCollection.deleteMany(query);
+        
                 res.status(200).json({
                     message: "Order Placed Successfully and Cart Items Deleted",
-                    paymentResult: result,
+                    paymentResult,
                     cartDeleteResult: deleteResult
                 });
             } catch (error) {
@@ -345,6 +353,7 @@ async function run() {
                 });
             }
         });
+        
 
         app.get('/orders', verifyToken, async (req, res) => {
             const email = req.user?.email;
