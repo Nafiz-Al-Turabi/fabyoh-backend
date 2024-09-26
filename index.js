@@ -61,6 +61,7 @@ async function run() {
 
         const userCollection = client.db('Fabyoh').collection('users');
         const cartCollection = client.db('Fabyoh').collection('carts');
+        const wishListCollection = client.db('Fabyoh').collection('wishLists');
         const paymentCollection = client.db('Fabyoh').collection('payments');
         const productCollection = client.db('Fabyoh').collection('products');
         // ************************************ User Authentication***************************************
@@ -521,8 +522,54 @@ async function run() {
             }
         });
 
-
         // ************************************ Add Products end ***************************************
+
+
+        app.post('/wishlist', verifyToken, async (req, res) => {
+            try {
+                const { user } = req;
+                const item = { ...req.body, email: user.email };
+                const wishList = await wishListCollection.insertOne(item)
+                res.status(200).json({ message: 'Wishlist added successfully.' });
+            } catch (error) {
+                res.status(500).json({ message: 'Failed to add wishlist' });
+            }
+        });
+
+        app.get('/wishlists', verifyToken, async (req, res) => {
+            const { email } = req.user;
+
+            try {
+                const wishlists = await wishListCollection.find({ email }).toArray();
+
+                res.status(200).json(wishlists);
+            } catch (error) {
+                console.error(error);
+                res.status(500).json({ message: 'Failed to get wishlist' });
+            }
+        });
+
+        app.delete('/wishlist/:id', verifyToken, async (req, res) => {
+            const id  = req.params.id; 
+            console.log(id);
+            try {
+                const result = await wishListCollection.deleteOne({ _id: id });
+                console.log(result);
+
+                if (result.deletedCount === 1) {
+                    res.status(200).json({ message: 'Wishlist item deleted successfully.' });
+                } else {
+                    res.status(404).json({ message: 'Wishlist item not found.' });
+                }
+            } catch (error) {
+                console.error(error);
+                res.status(500).json({ message: 'Failed to delete wishlist item' });
+            }
+        });
+
+
+
+
 
 
 
