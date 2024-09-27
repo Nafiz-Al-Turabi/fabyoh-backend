@@ -24,22 +24,35 @@ app.use(express.json());
 
 // Middleware to authenticate the token
 const jwtSecretKey = process.env.SECRET_KEY;
+
 function verifyToken(req, res, next) {
     const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1]; // Extract the token part
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        // Check if the Authorization header is present and follows 'Bearer <token>' format
+        return res.status(401).json({ message: 'Authorization header missing or malformed' });
+    }
+    const token = authHeader.split(' ')[1];
     if (!token) {
-        return res.status(401).json('Access denied');
+        return res.status(401).json({ message: 'Access denied. No token provided' });
     }
 
     try {
         const decoded = jwt.verify(token, jwtSecretKey);
-        req.user = decoded; // Attach decoded user to request object
+        req.user = decoded;
         next();
     } catch (error) {
-        console.error('Error verifying token:', error);
-        return res.status(403).json({ message: 'Invalid token' });
+        if (error instanceof jwt.TokenExpiredError) {
+            return res.status(401).json({ message: 'Token has expired. Please log in again.' });
+        } else if (error instanceof jwt.JsonWebTokenError) {
+            return res.status(403).json({ message: 'Invalid token. Access denied.' });
+        } else {
+            console.error('Unexpected error during token verification:', error);
+            return res.status(500).json({ message: 'An internal server error occurred during token verification' });
+        }
     }
 }
+
 
 
 // Mongo DB default code..
@@ -81,15 +94,6 @@ async function run() {
             next();
         }
 
-        // Example: Only admins can access this route
-        app.get('/admin-dashboard', verifyToken, requireAdmin, (req, res) => {
-            res.send('Welcome to the admin dashboard');
-        });
-
-        // Example: Only super admins can access this route
-        app.get('/super-admin-dashboard', verifyToken, requireSuperAdmin, (req, res) => {
-            res.send('Welcome to the super admin dashboard');
-        });
 
         app.post('/register', async (req, res) => {
             const UserData = req.body;
@@ -551,11 +555,8 @@ async function run() {
 
         app.delete('/wishlist/:id', verifyToken, async (req, res) => {
             const id  = req.params.id; 
-            console.log(id);
             try {
-                const result = await wishListCollection.deleteOne({ _id: id });
-                console.log(result);
-
+                const result = await wishListCollection.deleteOne({ _id: new ObjectId(id) });
                 if (result.deletedCount === 1) {
                     res.status(200).json({ message: 'Wishlist item deleted successfully.' });
                 } else {
