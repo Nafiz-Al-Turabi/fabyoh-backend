@@ -56,7 +56,8 @@ function verifyToken(req, res, next) {
 
 
 // Mongo DB default code..
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.f75tpn0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+// const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.f75tpn0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.ua7xrmm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
     serverApi: {
@@ -72,11 +73,11 @@ async function run() {
     try {
         await client.connect();
 
-        const userCollection = client.db('Fabyoh').collection('users');
-        const cartCollection = client.db('Fabyoh').collection('carts');
-        const wishListCollection = client.db('Fabyoh').collection('wishLists');
-        const paymentCollection = client.db('Fabyoh').collection('payments');
-        const productCollection = client.db('Fabyoh').collection('products');
+        const userCollection = client.db('market').collection('users');
+        const cartCollection = client.db('market').collection('carts');
+        const wishListCollection = client.db('market').collection('wishLists');
+        const paymentCollection = client.db('market').collection('payments');
+        const productCollection = client.db('market').collection('products');
         // ************************************ User Authentication***************************************
         // Middleware to check for admin or super admin
         function requireAdmin(req, res, next) {
