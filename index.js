@@ -1,9 +1,18 @@
 const express = require('express');
 const cors = require('cors');
+const dns = require('dns');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
 const app = express();
 const port = process.env.PORT || 5000;
+
+// DNS Configuration - Fix for cross-PC MongoDB connection issues
+if (process.env.DNS_SERVERS) {
+  dns.setServers(process.env.DNS_SERVERS.split(',').map(server => server.trim()).filter(Boolean));
+} else {
+  // Default to Google DNS if not specified
+  dns.setServers(['8.8.8.8', '8.8.4.4']);
+}
 
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
